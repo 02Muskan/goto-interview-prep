@@ -35,7 +35,7 @@ a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}.to
 </div></header>
 <div class="shell">
 <aside class="sidebar"><strong>Jump to a topic</strong><nav>
-<a href="#quickflow">★ Quick flowcharts</a><a href="#install">★ Installation & setup</a><a href="#why">01 · Why Next.js?</a><a href="#mental">02 · Mental model</a><a href="#routes">03 · Routing</a><a href="#components">04 · Server vs Client</a><a href="#rendering">05 · Rendering</a><a href="#data">06 · Data fetching</a><a href="#cache">07 · Caching</a><a href="#errors">08 · Errors & loading</a><a href="#mutations">09 · Forms & mutations</a><a href="#api">10 · APIs & Proxy</a><a href="#security">11 · Security</a><a href="#seo">12 · SEO & assets</a><a href="#performance">13 · Performance</a><a href="#structure">14 · Project structure</a><a href="#deploy">15 · Production checklist</a><a href="#questions">16 · Interview questions</a><a href="#docs">17 · Official docs</a>
+<a href="#quickflow">★ Quick flowcharts</a><a href="#install">★ Installation & setup</a><a href="#why">01 · Why Next.js?</a><a href="#mental">02 · Mental model</a><a href="#routes">03 · Routing</a><a href="#navigation">04 · Navigation</a><a href="#components">05 · Server vs Client</a><a href="#rendering">06 · Rendering</a><a href="#pages-router">07 · Pages vs App Router</a><a href="#data">08 · Data fetching</a><a href="#cache">09 · Caching</a><a href="#errors">10 · Errors & loading</a><a href="#mutations">11 · Forms & mutations</a><a href="#api">12 · APIs & Proxy</a><a href="#auth">13 · Authentication</a><a href="#security">14 · Security</a><a href="#styling">15 · Styling</a><a href="#seo">16 · SEO & assets</a><a href="#performance">17 · Performance</a><a href="#config">18 · Config & runtimes</a><a href="#testing">19 · Testing</a><a href="#structure">20 · Project structure</a><a href="#deploy">21 · Production checklist</a><a href="#questions">22 · Interview questions</a><a href="#docs">23 · Official docs</a>
 </nav></aside>
 <main class="content">
 <section class="panel priority red" id="install"><div class="importance must">★ Must know · Start here</div><h2>00 · Installation and project setup</h2>
@@ -105,6 +105,12 @@ npm run dev
 <div class="branch"><div class="flowbox green"><b>Yes</b><br><code>notFound()</code> + not-found UI</div><div class="flowbox red"><b>No, unexpected failure</b><br>Error boundary + safe logging</div></div>
 <div class="flowdown">↓</div><div class="flowbox must">Slow content → <code>loading.tsx</code> / Suspense fallback</div>
 </div>
+<h3>Server Action or Route Handler?</h3>
+<div class="flowchart">
+<div class="flowbox">Is the caller only your own Next.js UI (form/button)?</div><div class="flowdown">↓</div>
+<div class="branch"><div class="flowbox green"><b>Yes</b><br>Server Action + validate + authorize</div><div class="flowbox must"><b>No</b> (mobile app, webhook, 3rd party)<br>Route Handler with explicit HTTP contract</div></div>
+<div class="flowdown">↓</div><div class="flowbox">After a write → revalidate the affected path/tag</div>
+</div>
 <div class="keyline"><b>One-line memory aid:</b> <span style="color:#a51d16;font-weight:800">Route</span> chooses the UI · <span style="color:#805700;font-weight:800">Server/Client</span> chooses where code runs · <span style="color:#086849;font-weight:800">Cache policy</span> chooses freshness · <span style="color:#a51d16;font-weight:800">Error boundary</span> chooses recovery UI.</div>
 </section>
 
@@ -159,7 +165,37 @@ export default async function BlogPost({
 </ul>
 <div class="callout"><b>Common trap:</b> In current App Router docs, <code>params</code> and page <code>searchParams</code> are promises—await them. Older tutorials may show synchronous props.</div></section>
 
-<section class="panel priority red" id="components"><div class="importance must">★ Must know · React architecture</div><h2>04 · Server Components vs Client Components</h2>
+<section class="panel priority" id="navigation"><div class="importance high">◆ High priority · Navigation</div><h2>04 · Linking, navigation and prefetching</h2>
+<p>Next.js navigation is <b>client-side by default</b>: <code>&lt;Link&gt;</code> swaps the changed route segments without a full document reload, while shared layouts keep their state.</p>
+<div class="tablewrap"><table><thead><tr><th>API</th><th>Where</th><th>Use for</th></tr></thead><tbody>
+<tr><td><code>&lt;Link href&gt;</code></td><td>Server or Client</td><td>Default navigation; renders an <code>&lt;a&gt;</code>, so it is crawlable and accessible.</td></tr>
+<tr><td><code>useRouter()</code></td><td>Client only</td><td><code>push</code>, <code>replace</code>, <code>back</code>, <code>refresh</code>, <code>prefetch</code> after an event.</td></tr>
+<tr><td><code>usePathname()</code></td><td>Client only</td><td>Active-link styling, analytics.</td></tr>
+<tr><td><code>useSearchParams()</code></td><td>Client only</td><td>Read query string; wrap the reader in <code>&lt;Suspense&gt;</code> on prerendered routes.</td></tr>
+<tr><td><code>useParams()</code></td><td>Client only</td><td>Read dynamic segments inside nested Client Components.</td></tr>
+<tr><td><code>redirect()</code> / <code>permanentRedirect()</code></td><td>Server (render, action, handler)</td><td>Server-side redirects (307/308-style); throws, so do not wrap in try/catch.</td></tr>
+</tbody></table></div>
+<pre><code>// components/nav-link.tsx
+'use client'
+import Link from 'next/link'
+import { usePathname } from 'next/navigation'
+
+export function NavLink({ href, children }) {
+  const pathname = usePathname()
+  const active = pathname === href
+  return (
+    &lt;Link href={href} aria-current={active ? 'page' : undefined}&gt;
+      {children}
+    &lt;/Link&gt;
+  )
+}</code></pre>
+<h3>Prefetching in one paragraph</h3>
+<p>In production, <code>&lt;Link&gt;</code> prefetches routes as they enter the viewport. Static routes can be prefetched fully; dynamic routes are prefetched up to the nearest <code>loading.tsx</code>, so the loading UI can appear instantly. Prefetching is disabled in development. Turn it off with <code>prefetch={false}</code> for huge link lists where it wastes bandwidth.</p>
+<h3>Soft vs hard navigation</h3>
+<div class="grid2"><div class="tile"><h3>Soft (client)</h3><p class="muted">Only changed segments re-render, layouts and client state are kept, scroll moves to the top of the new segment. Triggered by <code>Link</code> / <code>router.push</code>.</p></div><div class="tile"><h3>Hard (full reload)</h3><p class="muted">Plain <code>&lt;a&gt;</code>, <code>window.location</code>, or navigating across different root layouts. All client state is lost.</p></div></div>
+<div class="callout"><b>Interview tip:</b> "Why does my URL state reset?" → probably a hard navigation or a <code>template.tsx</code>. "How do I keep filters in the URL?" → write them to <code>searchParams</code> with <code>router.replace</code> so the page is shareable and the server can read them.</div></section>
+
+<section class="panel priority red" id="components"><div class="importance must">★ Must know · React architecture</div><h2>05 · Server Components vs Client Components</h2>
 <div class="grid2"><div class="tile"><h3>Server Component (default)</h3><ul><li>Runs on the server.</li><li>Can await data and query a database directly.</li><li>Can keep secrets server-side when used correctly.</li><li>Good for read-heavy UI and reducing browser JavaScript.</li></ul><span class="tag">No useState / onClick</span></div><div class="tile"><h3>Client Component</h3><ul><li>Opt in with <code>'use client'</code> at the file boundary.</li><li>Use state, effects, event handlers and browser APIs.</li><li>Its JavaScript is sent to the browser.</li><li>Good for interactive widgets, menus, forms and charts.</li></ul><span class="tag">Interactive UI</span></div></div>
 <h3>Decision flow</h3><div class="flow"><div class="step">Need state, event handlers, effects or browser APIs?</div><div class="arrow">→</div><div class="step"><b>Yes</b><br>Client Component for that small boundary</div><div class="step"><b>No</b><br>Keep it a Server Component</div></div>
 <pre><code>// Server Component: app/products/page.tsx
@@ -183,9 +219,32 @@ export default function ProductFilter({ products }) {
     {/* render filtered products */}
   &lt;/&gt;
 }</code></pre>
-<p><b>Rule of thumb:</b> keep the client boundary as low and small as practical. Server Components can render Client Components, and Client Components can receive server-rendered UI as children/props where serializable. Do not pass database clients, secrets or arbitrary non-serializable values to the client.</p></section>
+<p><b>Rule of thumb:</b> keep the client boundary as low and small as practical. Server Components can render Client Components, and Client Components can receive server-rendered UI as children/props where serializable. Do not pass database clients, secrets or arbitrary non-serializable values to the client.</p>
+<h3>Composition patterns interviewers ask about</h3>
+<pre><code>// 1. Server content inside a Client wrapper: pass it as children
+// app/layout.tsx (Server)
+&lt;Modal&gt;&lt;ServerRenderedCart /&gt;&lt;/Modal&gt;   // Modal is 'use client'
 
-<section class="panel" id="rendering"><h2>05 · SSR, SSG, ISR and CSR</h2>
+// 2. Context providers must be Client Components — wrap once, high up
+// app/providers.tsx
+'use client'
+export function Providers({ children }) {
+  return &lt;ThemeProvider&gt;{children}&lt;/ThemeProvider&gt;
+}
+
+// 3. Guarantee a module never ends up in the browser bundle
+// lib/data.ts
+import 'server-only'   // build error if imported from a Client Component</code></pre>
+<div class="tablewrap"><table><thead><tr><th>Can I…</th><th>Answer</th></tr></thead><tbody>
+<tr><td>Import a Server Component into a Client Component file?</td><td>No — it becomes client code. Pass it as <code>children</code>/props instead.</td></tr>
+<tr><td>Pass a function prop from Server to Client?</td><td>Only a Server Action (<code>'use server'</code>). Regular functions are not serializable.</td></tr>
+<tr><td>Pass a <code>Date</code>, <code>Map</code> or Promise?</td><td>React can serialize many built-ins including Dates, Maps, Sets and Promises (consume with <code>use()</code>); class instances are not supported.</td></tr>
+<tr><td>Use <code>async</code> Client Components?</td><td>No. Fetch in a parent Server Component or use a client data library.</td></tr>
+<tr><td>Do Client Components render on the server?</td><td>Yes, for the initial HTML. <code>'use client'</code> means "also ships to and hydrates in the browser", not "browser only".</td></tr>
+</tbody></table></div>
+<div class="warn"><b>Classic trap:</b> <code>'use client'</code> marks a <i>boundary</i>. Everything imported by that file joins the client bundle, so placing it in a top-level layout silently turns the whole tree into client code.</div></section>
+
+<section class="panel" id="rendering"><h2>06 · SSR, SSG, ISR and CSR</h2>
 <div class="tablewrap"><table><thead><tr><th>Term</th><th>When HTML/data is produced</th><th>Best fit</th><th>Trade-off</th></tr></thead><tbody>
 <tr><td><b>SSR</b></td><td>At request time on the server.</td><td>Request-specific or frequently changing content.</td><td>Server work on requests; latency depends on data.</td></tr>
 <tr><td><b>SSG / prerendering</b></td><td>Before requests, commonly at build time.</td><td>Stable public pages.</td><td>Needs a strategy to refresh stale content.</td></tr>
@@ -194,9 +253,45 @@ export default function ProductFilter({ products }) {
 <tr><td><b>Streaming</b></td><td>Send UI in chunks as parts become ready.</td><td>Pages with slow or independent data sections.</td><td>Requires good loading boundaries and thoughtful UX.</td></tr>
 </tbody></table></div>
 <p class="muted">These are useful conceptual labels, not four mutually exclusive switches. A Next.js route can combine server rendering, prerendered pieces, client interactivity and streaming.</p>
-<h3>How to answer “Which one would you choose?”</h3><ol><li>Is content public and mostly stable? Prefer prerendering.</li><li>Can it be slightly stale? Add time-based or on-demand revalidation.</li><li>Does it depend on the current user/request? Render the relevant part at request time and enforce authorization.</li><li>Is a section slow? Put it behind a loading/Suspense boundary so the rest can render sooner.</li></ol></section>
+<h3>How to answer “Which one would you choose?”</h3><ol><li>Is content public and mostly stable? Prefer prerendering.</li><li>Can it be slightly stale? Add time-based or on-demand revalidation.</li><li>Does it depend on the current user/request? Render the relevant part at request time and enforce authorization.</li><li>Is a section slow? Put it behind a loading/Suspense boundary so the rest can render sooner.</li></ol>
+<h3>What actually reaches the browser</h3>
+<div class="flow"><div class="step"><b>HTML</b><br><span class="muted">fast first paint</span></div><div class="arrow">+</div><div class="step"><b>RSC payload</b><br><span class="muted">serialized Server Component tree</span></div><div class="arrow">+</div><div class="step"><b>Client JS</b><br><span class="muted">only for 'use client' parts</span></div><div class="arrow">→</div><div class="step"><b>Hydration</b><br><span class="muted">attach event handlers</span></div></div>
+<p class="muted small">The RSC payload is a compact description of the rendered Server Component output plus placeholders for Client Components and their props. It is what client-side navigations fetch instead of a full HTML document.</p>
+<h3>Partial Prerendering (PPR) idea</h3>
+<p>A route can serve a <b>static shell</b> instantly and stream <b>dynamic holes</b> (wrapped in <code>&lt;Suspense&gt;</code>) in the same response. In recent versions this model is tied to Cache Components; check your version's config before relying on it.</p></section>
 
-<section class="panel priority" id="data"><div class="importance high">◆ High priority · Data fetching</div><h2>06 · Data fetching</h2><p>In a Server Component, fetch directly with <code>fetch</code>, an ORM or a database client. Do not add a needless HTTP hop by calling your own Route Handler from a Server Component.</p>
+<section class="panel" id="pages-router"><div class="importance high">◆ Often asked · Legacy & migration</div><h2>07 · Pages Router vs App Router</h2>
+<p class="lead">Many production codebases still run the Pages Router, and interviewers love asking you to map old APIs to new ones.</p>
+<div class="tablewrap"><table><thead><tr><th>Pages Router (<code>pages/</code>)</th><th>App Router (<code>app/</code>) equivalent</th></tr></thead><tbody>
+<tr><td><code>getServerSideProps</code></td><td>async Server Component reading request data (<code>cookies()</code>, <code>headers()</code>, uncached fetch)</td></tr>
+<tr><td><code>getStaticProps</code></td><td>async Server Component with cached/prerendered data</td></tr>
+<tr><td><code>getStaticProps</code> + <code>revalidate</code></td><td><code>fetch(url, { next: { revalidate } })</code> or version-specific cache APIs</td></tr>
+<tr><td><code>getStaticPaths</code> (+ <code>fallback</code>)</td><td><code>generateStaticParams</code> (+ <code>dynamicParams</code>)</td></tr>
+<tr><td><code>pages/_app.tsx</code>, <code>_document.tsx</code></td><td><code>app/layout.tsx</code> (root layout owns <code>&lt;html&gt;</code>/<code>&lt;body&gt;</code>)</td></tr>
+<tr><td><code>pages/api/*.ts</code></td><td><code>app/**/route.ts</code> Route Handlers</td></tr>
+<tr><td><code>next/head</code></td><td><code>metadata</code> / <code>generateMetadata</code></td></tr>
+<tr><td><code>useRouter</code> from <code>next/router</code></td><td><code>useRouter</code>, <code>usePathname</code>, <code>useSearchParams</code> from <code>next/navigation</code></td></tr>
+<tr><td><code>pages/404.tsx</code>, <code>500.tsx</code></td><td><code>not-found.tsx</code>, <code>error.tsx</code>, <code>global-error.tsx</code></td></tr>
+<tr><td>Every component is a Client Component</td><td>Server Components by default</td></tr>
+</tbody></table></div>
+<pre><code>// Pages Router (old)
+export async function getServerSideProps({ params }) {
+  const product = await getProduct(params.id)
+  if (!product) return { notFound: true }
+  return { props: { product } }
+}
+export default function Page({ product }) { return &lt;h1&gt;{product.name}&lt;/h1&gt; }
+
+// App Router (new)
+export default async function Page({ params }) {
+  const { id } = await params
+  const product = await getProduct(id)
+  if (!product) notFound()
+  return &lt;h1&gt;{product.name}&lt;/h1&gt;
+}</code></pre>
+<div class="callout"><b>Migration answer:</b> both routers can coexist in one app, so migrate incrementally route by route. Watch for routes defined in both directories (conflict), <code>next/router</code> vs <code>next/navigation</code> imports, and data fetching that now runs inside components.</div></section>
+
+<section class="panel priority" id="data"><div class="importance high">◆ High priority · Data fetching</div><h2>08 · Data fetching</h2><p>In a Server Component, fetch directly with <code>fetch</code>, an ORM or a database client. Do not add a needless HTTP hop by calling your own Route Handler from a Server Component.</p>
 <pre><code>export default async function Page() {
   const response = await fetch('https://api.example.com/products', {
     // Choose caching/revalidation intentionally for your Next.js version.
@@ -216,9 +311,27 @@ const [user, orders] = await Promise.all([
 const user = await getUser()
 const permissions = await getPermissions(user.id)</code></pre>
 <ul><li>Check <code>response.ok</code>; <code>fetch</code> does not throw just because the server returned HTTP 404/500.</li><li>Use request-time APIs such as cookies/headers only when needed; they can affect rendering behavior.</li><li>Use <code>loading.tsx</code> or a local <code>&lt;Suspense fallback={...}&gt;</code> around slow work.</li><li>Validate external/API data at boundaries; TypeScript types do not validate runtime JSON.</li><li>For client-side re-fetching, consider a client data library when caching, retries, polling or optimistic updates justify it.</li></ul>
+<h3>Deduplicate and share data across a render</h3>
+<pre><code>// lib/data.ts
+import 'server-only'
+import { cache } from 'react'
+
+// One DB call per request, even if layout, page and
+// generateMetadata all ask for the same user.
+export const getUser = cache(async (id: string) =&gt; {
+  return db.user.findUnique({ where: { id } })
+})</code></pre>
+<ul><li><b>Request memoization:</b> identical <code>GET</code> <code>fetch</code> calls in one render pass are deduplicated; use React <code>cache()</code> for ORM/DB calls.</li><li>That memoization lives only for one request; it is not the cross-request Data Cache.</li><li><b>Streaming a promise:</b> start a fetch in a Server Component, pass the promise to a Client Component and unwrap it with <code>use()</code> inside <code>&lt;Suspense&gt;</code>.</li></ul>
+<div class="tablewrap"><table><thead><tr><th>Pattern</th><th>Problem it solves</th></tr></thead><tbody>
+<tr><td><code>Promise.all</code></td><td>Independent requests no longer wait on each other.</td></tr>
+<tr><td>Separate <code>&lt;Suspense&gt;</code> per section</td><td>Slow widget does not block the whole page.</td></tr>
+<tr><td>React <code>cache()</code></td><td>Same query repeated in layout/page/metadata.</td></tr>
+<tr><td>Data Access Layer (DAL)</td><td>One place for queries, auth checks and DTO shaping.</td></tr>
+<tr><td>TanStack Query / SWR</td><td>Client polling, infinite scroll, optimistic UI, background refetch.</td></tr>
+</tbody></table></div>
 <div class="callout"><b>Interview signal:</b> explain where data runs, how errors are surfaced, whether data is fresh or cached, and how you avoid waterfalls—not just the syntax of <code>fetch</code>.</div></section>
 
-<section class="panel priority" id="cache"><div class="importance high">◆ High priority · Caching</div><h2>07 · Caching and revalidation</h2><p>Caching is a policy decision: <b>what can be reused, for how long, and how does it become fresh?</b> Avoid saying “Next.js always caches fetch” or “never caches fetch” without specifying version/configuration.</p>
+<section class="panel priority" id="cache"><div class="importance high">◆ High priority · Caching</div><h2>09 · Caching and revalidation</h2><p>Caching is a policy decision: <b>what can be reused, for how long, and how does it become fresh?</b> Avoid saying “Next.js always caches fetch” or “never caches fetch” without specifying version/configuration.</p>
 <div class="tablewrap"><table><thead><tr><th>Need</th><th>Common tool/pattern</th><th>Think about</th></tr></thead><tbody>
 <tr><td>Fresh data every request</td><td><code>cache: 'no-store'</code> in applicable fetch patterns</td><td>More upstream work and latency.</td></tr>
 <tr><td>Reuse cached fetch data</td><td><code>cache: 'force-cache'</code> where supported</td><td>Staleness and invalidation.</td></tr>
@@ -227,9 +340,39 @@ const permissions = await getPermissions(user.id)</code></pre>
 <tr><td>Cache computed work</td><td>Version-appropriate Cache Components / cache APIs</td><td>Know the framework version and feature configuration.</td></tr>
 </tbody></table></div>
 <h3>Cache reasoning flow</h3><div class="flow"><div class="step">Can this data be shared between users?</div><div class="arrow">→</div><div class="step">Define freshness window</div><div class="arrow">→</div><div class="step">Define invalidation after writes</div><div class="arrow">→</div><div class="step">Test production behavior</div></div>
+<h3>The cache layers, by name</h3>
+<div class="tablewrap"><table><thead><tr><th>Layer</th><th>Where</th><th>Lifetime</th><th>What it stores</th></tr></thead><tbody>
+<tr><td>Request memoization</td><td>Server</td><td>One request / render pass</td><td>Return values of identical fetch / <code>cache()</code> calls</td></tr>
+<tr><td>Data Cache</td><td>Server</td><td>Across requests & deploys until revalidated</td><td>Results of cached fetches / cached functions</td></tr>
+<tr><td>Full Route Cache</td><td>Server</td><td>Until revalidation or redeploy</td><td>Prerendered HTML + RSC payload of static routes</td></tr>
+<tr><td>Router Cache</td><td>Browser memory</td><td>Session / short time windows</td><td>RSC payloads of visited & prefetched segments</td></tr>
+</tbody></table></div>
+<h3>Tag-based invalidation</h3>
+<pre><code>// read
+const products = await fetch(url, { next: { tags: ['products'] } })
+
+// write (Server Action)
+'use server'
+import { revalidateTag, revalidatePath } from 'next/cache'
+export async function addProduct(data) {
+  await db.product.create({ data })
+  revalidateTag('products')     // every fetch tagged 'products'
+  revalidatePath('/products')   // or a specific route
+}</code></pre>
+<h3>Newer model: Cache Components</h3>
+<pre><code>// next.config.ts → cacheComponents: true (Next.js 16+)
+import { cacheLife, cacheTag } from 'next/cache'
+
+export async function getProducts() {
+  'use cache'
+  cacheLife('hours')
+  cacheTag('products')
+  return db.product.findMany()
+}</code></pre>
+<p class="muted small">With Cache Components, dynamic is the default and you opt into caching with <code>'use cache'</code>. Newer releases also changed invalidation helpers (e.g. a cache-life profile argument for <code>revalidateTag</code>, plus <code>updateTag</code> for read-your-own-writes in Server Actions). Confirm against your installed version.</p>
 <div class="warn"><b>Security rule:</b> never cache private, user-specific data in a way that can leak it across users. Be explicit about cache keys, authorization boundaries and what is safe to reuse.</div></section>
 
-<section class="panel priority red" id="errors"><div class="importance must">★ Must know · Error handling</div><h2>08 · Loading, not-found and error handling</h2>
+<section class="panel priority red" id="errors"><div class="importance must">★ Must know · Error handling</div><h2>10 · Loading, not-found and error handling</h2>
 <div class="grid3"><div class="tile"><h3>Loading</h3><p><code>loading.tsx</code> or Suspense fallback. Show a useful skeleton or progress state.</p></div><div class="tile"><h3>Not found</h3><p>Call <code>notFound()</code> when a resource does not exist; render a <code>not-found.tsx</code> UI.</p></div><div class="tile"><h3>Unexpected error</h3><p><code>error.tsx</code> creates a route-segment error boundary. It must be a Client Component.</p></div></div>
 <pre><code>// app/products/[id]/page.tsx
 import { notFound } from 'next/navigation'
@@ -241,9 +384,25 @@ export default async function ProductPage({ params }) {
   return &lt;h1&gt;{product.name}&lt;/h1&gt;
 }</code></pre>
 <p><b>Expected vs unexpected errors:</b> expected cases such as validation failures should usually be modeled as return values/messages. Unexpected exceptions should be logged safely and handled by an error boundary. Event-handler errors are not automatically caught by React error boundaries—handle them explicitly.</p>
+<pre><code>// app/products/error.tsx
+'use client'
+export default function Error({ error, reset }: {
+  error: Error &amp; { digest?: string }
+  reset: () =&gt; void
+}) {
+  return (
+    &lt;div role="alert"&gt;
+      &lt;p&gt;Something went wrong loading products.&lt;/p&gt;
+      &lt;button onClick={() =&gt; reset()}&gt;Try again&lt;/button&gt;
+    &lt;/div&gt;
+  )
+}</code></pre>
+<ul><li><code>error.tsx</code> does <b>not</b> catch errors from the <code>layout.tsx</code> in the same segment—put the boundary in the parent segment for that.</li><li><code>global-error.tsx</code> catches root layout errors and must render its own <code>&lt;html&gt;</code> and <code>&lt;body&gt;</code>.</li><li>In production, server error messages are replaced with a generic message plus a <code>digest</code> you can match against server logs.</li><li><code>notFound()</code> and <code>redirect()</code> work by throwing; do not swallow them in a broad <code>try/catch</code>.</li></ul>
+<div class="flow"><div class="step">layout.tsx</div><div class="arrow">⊃</div><div class="step">template.tsx</div><div class="arrow">⊃</div><div class="step">error.tsx boundary</div><div class="arrow">⊃</div><div class="step">loading.tsx Suspense</div><div class="arrow">⊃</div><div class="step">not-found.tsx</div><div class="arrow">⊃</div><div class="step">page.tsx</div></div>
+<p class="muted small">Component hierarchy of one route segment: this nesting order is why an error boundary cannot catch its own segment's layout.</p>
 <p><b>Interview question:</b> Why use a nested error boundary? It lets a section fail with a fallback and recovery action without necessarily replacing the whole application UI.</p></section>
 
-<section class="panel" id="mutations"><h2>09 · Forms, Server Actions and mutations</h2><p>Server Functions are async functions that run on the server. When used for a mutation/form action, they are commonly called Server Actions.</p>
+<section class="panel" id="mutations"><h2>11 · Forms, Server Actions and mutations</h2><p>Server Functions are async functions that run on the server. When used for a mutation/form action, they are commonly called Server Actions.</p>
 <pre><code>// app/actions.ts
 'use server'
 
@@ -258,33 +417,278 @@ export async function createPost(formData: FormData) {
   // Revalidate the affected path/tag if required.
   return { success: true }
 }</code></pre>
-<ul><li>Validate all input on the server, even if the browser validates it too.</li><li>Authenticate and authorize inside each Server Action; it can be invoked via a direct POST, not only through your UI.</li><li>Use pending and error states for good form UX; do not expose internal stack traces or secrets.</li><li>Revalidate affected cached data after a successful write.</li><li>Use Route Handlers instead when you need a general HTTP API for other clients/webhooks or explicit HTTP methods.</li></ul></section>
+<ul><li>Validate all input on the server, even if the browser validates it too.</li><li>Authenticate and authorize inside each Server Action; it can be invoked via a direct POST, not only through your UI.</li><li>Use pending and error states for good form UX; do not expose internal stack traces or secrets.</li><li>Revalidate affected cached data after a successful write.</li><li>Use Route Handlers instead when you need a general HTTP API for other clients/webhooks or explicit HTTP methods.</li></ul>
+<h3>Form UX with React 19 hooks</h3>
+<pre><code>// app/posts/new/form.tsx
+'use client'
+import { useActionState } from 'react'
+import { useFormStatus } from 'react-dom'
+import { createPost } from '@/app/actions'   // (prevState, formData) =&gt; result
 
-<section class="panel" id="api"><h2>10 · Route Handlers, API design and Proxy</h2>
+function SubmitButton() {
+  const { pending } = useFormStatus()
+  return &lt;button disabled={pending}&gt;{pending ? 'Saving…' : 'Save'}&lt;/button&gt;
+}
+
+export function NewPostForm() {
+  const [state, formAction] = useActionState(createPost, null)
+  return (
+    &lt;form action={formAction}&gt;
+      &lt;input name="title" required /&gt;
+      {state?.error &amp;&amp; &lt;p role="alert"&gt;{state.error}&lt;/p&gt;}
+      &lt;SubmitButton /&gt;
+    &lt;/form&gt;
+  )
+}</code></pre>
+<div class="tablewrap"><table><thead><tr><th>Hook</th><th>Gives you</th></tr></thead><tbody>
+<tr><td><code>useActionState</code></td><td>Action's last returned state + pending flag; action receives <code>(prevState, formData)</code>.</td></tr>
+<tr><td><code>useFormStatus</code></td><td>Pending state of the parent <code>&lt;form&gt;</code>; must be used in a child component.</td></tr>
+<tr><td><code>useOptimistic</code></td><td>Show the expected result immediately, roll back automatically if the action fails.</td></tr>
+<tr><td><code>useTransition</code></td><td>Call an action outside a form (e.g. a like button) with a pending state.</td></tr>
+</tbody></table></div>
+<div class="callout"><b>Progressive enhancement:</b> a <code>&lt;form action={serverAction}&gt;</code> rendered by a Server Component can submit even before JavaScript loads. Validate with a schema library such as Zod and return field-level errors instead of throwing.</div></section>
+
+<section class="panel" id="api"><h2>12 · Route Handlers, API design and Proxy</h2>
 <div class="grid2"><div class="tile"><h3>Route Handler — <code>route.ts</code></h3><p>Implement HTTP endpoints using Web Request/Response APIs. Supports GET, POST, PUT, PATCH, DELETE, HEAD and OPTIONS.</p><pre><code>// app/api/health/route.ts
 export async function GET() {
   return Response.json({ ok: true })
 }</code></pre></div><div class="tile"><h3>Proxy — <code>proxy.ts</code></h3><p>Runs before a request completes; can redirect, rewrite or change headers based on request data. In Next.js 16, Middleware was renamed Proxy.</p><p class="muted">Use it for lightweight request routing—not as your only authorization/security layer or for slow data fetching.</p></div></div>
-<h3>Choose the right tool</h3><ul><li><b>Server Component:</b> read data on the server directly.</li><li><b>Server Action:</b> mutate data from a form/action context.</li><li><b>Route Handler:</b> expose an HTTP endpoint to browsers, external clients or webhooks.</li><li><b>Proxy:</b> perform lightweight request interception/redirect/rewrite logic.</li></ul></section>
+<h3>Choose the right tool</h3><ul><li><b>Server Component:</b> read data on the server directly.</li><li><b>Server Action:</b> mutate data from a form/action context.</li><li><b>Route Handler:</b> expose an HTTP endpoint to browsers, external clients or webhooks.</li><li><b>Proxy:</b> perform lightweight request interception/redirect/rewrite logic.</li></ul>
+<h3>Route Handler with params, query and body</h3>
+<pre><code>// app/api/products/[id]/route.ts
+import { NextRequest } from 'next/server'
 
-<section class="panel priority green" id="security"><div class="importance good">✓ Production critical · Security</div><h2>11 · Security fundamentals</h2>
+export async function GET(req: NextRequest, { params }: {
+  params: Promise&lt;{ id: string }&gt;
+}) {
+  const { id } = await params
+  const fields = req.nextUrl.searchParams.get('fields')
+  const product = await getProduct(id, fields)
+  if (!product) return Response.json({ error: 'Not found' }, { status: 404 })
+  return Response.json(product)
+}
+
+export async function PATCH(req: NextRequest, ctx) {
+  const session = await getSession()
+  if (!session) return new Response('Unauthorized', { status: 401 })
+  const body = await req.json()          // validate before use!
+  // ...
+  return Response.json({ ok: true })
+}</code></pre>
+<h3>Proxy example with a matcher</h3>
+<pre><code>// proxy.ts (project root or src/) — was middleware.ts before v16
+import { NextResponse, type NextRequest } from 'next/server'
+
+export function proxy(request: NextRequest) {
+  const hasSession = request.cookies.has('session')
+  if (!hasSession) {
+    return NextResponse.redirect(new URL('/login', request.url))
+  }
+  return NextResponse.next()
+}
+
+export const config = {
+  matcher: ['/dashboard/:path*', '/settings/:path*'],
+}</code></pre>
+<p class="muted small">Proxy is an <i>optimistic</i> check (is there a cookie?). The real session verification and permission check still happen in the page, action or DAL.</p>
+<div class="tablewrap"><table><thead><tr><th>Status</th><th>Meaning</th><th>Typical use</th></tr></thead><tbody>
+<tr><td>200 / 201 / 204</td><td>OK / Created / No content</td><td>Read, create, delete</td></tr>
+<tr><td>400 / 422</td><td>Bad request / validation failed</td><td>Invalid body or params</td></tr>
+<tr><td>401 vs 403</td><td>Not logged in vs not allowed</td><td>Missing session vs wrong role</td></tr>
+<tr><td>404 / 409</td><td>Not found / conflict</td><td>Missing resource, duplicate key</td></tr>
+<tr><td>429 / 500</td><td>Rate limited / server error</td><td>Throttling, unexpected failures</td></tr>
+</tbody></table></div></section>
+
+<section class="panel priority red" id="auth"><div class="importance must">★ Must know · Auth</div><h2>13 · Authentication and sessions</h2>
+<p class="lead"><b>Authentication</b> = who are you? <b>Authorization</b> = what may you do? <b>Session management</b> = how do we remember you between requests?</p>
+<div class="flow"><div class="step"><b>Sign in</b><br><span class="muted">form → Server Action</span></div><div class="arrow">→</div><div class="step"><b>Verify</b><br><span class="muted">password hash / OAuth</span></div><div class="arrow">→</div><div class="step"><b>Create session</b><br><span class="muted">httpOnly cookie</span></div><div class="arrow">→</div><div class="step"><b>Each request</b><br><span class="muted">verify in DAL</span></div><div class="arrow">→</div><div class="step"><b>Authorize</b><br><span class="muted">role / ownership</span></div></div>
+<div class="grid2"><div class="tile"><h3>Stateless session (JWT in cookie)</h3><ul><li>Signed/encrypted token holds user id + expiry.</li><li>No DB lookup per request; scales easily.</li><li>Hard to revoke before expiry; keep payload small.</li></ul></div><div class="tile"><h3>Database session</h3><ul><li>Cookie holds an opaque session id.</li><li>Server looks up the session each request.</li><li>Easy revocation ("log out all devices"); extra lookup cost.</li></ul></div></div>
+<pre><code>// lib/dal.ts — the single place that verifies sessions
+import 'server-only'
+import { cache } from 'react'
+import { cookies } from 'next/headers'
+import { redirect } from 'next/navigation'
+
+export const verifySession = cache(async () =&gt; {
+  const token = (await cookies()).get('session')?.value
+  const session = await decrypt(token)       // jose / your auth lib
+  if (!session?.userId) redirect('/login')
+  return { userId: session.userId, role: session.role }
+})
+
+// app/dashboard/page.tsx
+export default async function Dashboard() {
+  const { userId } = await verifySession()
+  const orders = await getOrdersFor(userId)   // scoped by owner
+  return &lt;OrderList orders={orders} /&gt;
+}</code></pre>
+<h3>Cookie settings to remember</h3>
+<ul class="two-col"><li><code>httpOnly: true</code> — JS cannot read it (XSS protection).</li><li><code>secure: true</code> — HTTPS only.</li><li><code>sameSite: 'lax'</code> — CSRF mitigation.</li><li><code>path: '/'</code> and a sensible <code>expires</code>/<code>maxAge</code>.</li></ul>
+<div class="tablewrap"><table><thead><tr><th>Where</th><th>Check</th></tr></thead><tbody>
+<tr><td>Proxy</td><td>Optimistic redirect only (cookie exists?). Never the only check.</td></tr>
+<tr><td>Layout</td><td>Avoid relying on it: layouts do not re-render on every navigation.</td></tr>
+<tr><td>Page / Server Component</td><td>Verify session before reading private data.</td></tr>
+<tr><td>Server Action / Route Handler</td><td>Verify session <i>and</i> permission on every call.</td></tr>
+<tr><td>DAL / DTO</td><td>Return only the fields the caller may see.</td></tr>
+</tbody></table></div>
+<div class="callout"><b>Libraries:</b> Auth.js (NextAuth), Clerk, Better Auth, Supabase Auth, Auth0, Kinde, etc. Be ready to say what they handle for you (OAuth flows, session rotation, CSRF) and what still remains your job (authorization rules and data scoping).</div>
+<div class="warn"><b>Never</b> store tokens in <code>localStorage</code> for a server-rendered app, never trust a role sent from the client, and always hash passwords with a slow algorithm (bcrypt/argon2).</div></section>
+
+<section class="panel priority green" id="security"><div class="importance good">✓ Production critical · Security</div><h2>14 · Security fundamentals</h2>
 <ul><li><b>Secrets:</b> keep API keys and database credentials server-side. Variables prefixed with <code>NEXT_PUBLIC_</code> are exposed to browser bundles.</li><li><b>Authorization:</b> check permissions close to the data access or mutation, not only in navigation/UI or Proxy.</li><li><b>Input:</b> validate and normalize all untrusted input on the server.</li><li><b>Data exposure:</b> return only fields the client is allowed to see; do not pass entire database records by habit.</li><li><b>CSRF / webhooks:</b> use appropriate framework protections and verify signatures/authentication for integrations.</li><li><b>Redirects:</b> validate user-controlled redirect destinations to avoid open redirects.</li><li><b>Errors/logs:</b> never send stack traces, secrets, tokens or private data to users.</li></ul>
-<div class="callout"><b>Golden principle:</b> hiding a button is not authorization. Every read and write involving private data must enforce the correct access rules on the server.</div></section>
+<div class="callout"><b>Golden principle:</b> hiding a button is not authorization. Every read and write involving private data must enforce the correct access rules on the server.</div>
+<h3>Common attacks and the Next.js-shaped defence</h3>
+<div class="tablewrap"><table><thead><tr><th>Threat</th><th>Defence</th></tr></thead><tbody>
+<tr><td>XSS</td><td>React escapes output by default; avoid <code>dangerouslySetInnerHTML</code> or sanitize first; add a Content-Security-Policy header.</td></tr>
+<tr><td>CSRF</td><td>Server Actions only accept POST and compare Origin/Host; use <code>sameSite</code> cookies; protect custom Route Handlers yourself.</td></tr>
+<tr><td>IDOR (accessing others' data by id)</td><td>Scope every query by owner/tenant: <code>where: { id, userId }</code>.</td></tr>
+<tr><td>Leaking secrets to the bundle</td><td><code>import 'server-only'</code>, no <code>NEXT_PUBLIC_</code> on secrets, audit props passed to Client Components.</td></tr>
+<tr><td>SSRF via user URLs</td><td>Allow-list hosts for server fetches and <code>images.remotePatterns</code>.</td></tr>
+<tr><td>Brute force / abuse</td><td>Rate limit login, signup and expensive endpoints.</td></tr>
+</tbody></table></div>
+<pre><code>// next.config.ts — security headers
+async headers() {
+  return [{
+    source: '/(.*)',
+    headers: [
+      { key: 'X-Content-Type-Options', value: 'nosniff' },
+      { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+      { key: 'X-Frame-Options', value: 'DENY' },
+    ],
+  }]
+}</code></pre></section>
 
-<section class="panel" id="seo"><h2>12 · SEO, images, fonts and metadata</h2>
+<section class="panel" id="styling"><h2>15 · Styling options</h2>
+<div class="tablewrap"><table><thead><tr><th>Approach</th><th>How</th><th>Works in Server Components?</th><th>Notes</th></tr></thead><tbody>
+<tr><td>Global CSS</td><td><code>import './globals.css'</code> in root layout</td><td>Yes</td><td>Resets, CSS variables, base typography.</td></tr>
+<tr><td>CSS Modules</td><td><code>styles.module.css</code> → <code>styles.card</code></td><td>Yes</td><td>Locally scoped class names, zero runtime.</td></tr>
+<tr><td>Tailwind CSS</td><td>Utility classes, offered by <code>create-next-app</code></td><td>Yes</td><td>Zero runtime, unused CSS removed at build time.</td></tr>
+<tr><td>Sass</td><td>Install <code>sass</code>, use <code>.scss</code> / <code>.module.scss</code></td><td>Yes</td><td>Familiar to legacy codebases.</td></tr>
+<tr><td>CSS-in-JS</td><td>styled-components, Emotion…</td><td>Client only</td><td>Needs a style registry for SSR; runtime cost.</td></tr>
+</tbody></table></div>
+<pre><code>// app/components/card.tsx
+import styles from './card.module.css'
+
+export function Card({ children }) {
+  return &lt;div className={styles.card}&gt;{children}&lt;/div&gt;
+}</code></pre>
+<ul><li>Dark mode without flash: set a class on <code>&lt;html&gt;</code> before paint (e.g. <code>next-themes</code>) and add <code>suppressHydrationWarning</code> on <code>&lt;html&gt;</code>.</li><li>CSS order in production follows import order; keep global imports in the root layout to avoid surprises.</li></ul>
+<div class="callout"><b>Interview answer:</b> "With Server Components I prefer zero-runtime styling—Tailwind or CSS Modules—because runtime CSS-in-JS forces components to become Client Components."</div></section>
+
+<section class="panel" id="seo"><h2>16 · SEO, images, fonts and metadata</h2>
 <ul><li><b>Metadata:</b> export a static <code>metadata</code> object or use <code>generateMetadata</code> for data-dependent titles/descriptions. These exports are supported in Server Components.</li><li><b>Images:</b> use <code>next/image</code> for sizing, responsive delivery and optimization; configure allowed remote image sources when needed.</li><li><b>Fonts:</b> use <code>next/font</code> to optimize font loading and reduce layout shifts.</li><li><b>Social previews:</b> configure Open Graph metadata and generated/static OG images.</li><li><b>Accessibility:</b> semantic HTML, keyboard navigation, visible focus, descriptive alt text and clear loading/error states still matter.</li><li><b>Discoverability:</b> add sitemap/robots configuration where relevant and ensure pages intended for search engines are crawlable.</li></ul>
 <pre><code>import type { Metadata } from 'next'
 
 export const metadata: Metadata = {
   title: 'Products | Example Store',
   description: 'Browse our product collection.',
-}</code></pre></section>
+}</code></pre>
+<h3>Dynamic metadata for a detail page</h3>
+<pre><code>// app/products/[id]/page.tsx
+export async function generateMetadata({ params }): Promise&lt;Metadata&gt; {
+  const { id } = await params
+  const product = await getProduct(id)       // deduped with the page via cache()
+  return {
+    title: product?.name ?? 'Product not found',
+    description: product?.summary,
+    openGraph: { images: [product?.imageUrl] },
+    alternates: { canonical: `/products/${id}` },
+  }
+}</code></pre>
+<h3>File-based SEO conventions</h3>
+<div class="tablewrap"><table><thead><tr><th>File</th><th>Output</th></tr></thead><tbody>
+<tr><td><code>app/sitemap.ts</code></td><td><code>/sitemap.xml</code> generated from your data</td></tr>
+<tr><td><code>app/robots.ts</code></td><td><code>/robots.txt</code></td></tr>
+<tr><td><code>opengraph-image.tsx</code> / <code>.png</code></td><td>Per-route social preview image (can be generated with <code>ImageResponse</code>)</td></tr>
+<tr><td><code>icon.png</code>, <code>apple-icon.png</code>, <code>favicon.ico</code></td><td>Favicons and app icons</td></tr>
+<tr><td><code>manifest.ts</code></td><td>Web app manifest</td></tr>
+</tbody></table></div>
+<pre><code>import Image from 'next/image'
+import { Inter } from 'next/font/google'
+const inter = Inter({ subsets: ['latin'] })   // self-hosted at build time
 
-<section class="panel" id="performance"><h2>13 · Performance and debugging</h2>
+&lt;Image src="/hero.jpg" alt="Store front" width={1200} height={600} priority /&gt;
+&lt;Image src={url} alt="" fill sizes="(max-width: 768px) 100vw, 33vw" /&gt;</code></pre>
+<p class="muted small">Use <code>priority</code> only for the above-the-fold LCP image (Next.js 16 deprecates it in favour of <code>preload</code>); give <code>fill</code> images a positioned parent and a <code>sizes</code> hint.</p></section>
+
+<section class="panel" id="performance"><h2>17 · Performance and debugging</h2>
 <div class="grid2"><div class="tile"><h3>Rendering & bundle</h3><ul><li>Keep Client Components narrow.</li><li>Use Server Components for server-only work.</li><li>Lazy-load heavy client-only widgets when appropriate.</li><li>Inspect bundle size instead of guessing.</li></ul></div><div class="tile"><h3>Network & UX</h3><ul><li>Parallelize independent requests.</li><li>Stream slow sections with Suspense.</li><li>Use loading skeletons that preserve layout.</li><li>Use Link/prefetch behavior appropriately.</li></ul></div><div class="tile"><h3>Data & cache</h3><ul><li>Measure slow API/database calls.</li><li>Set intentional freshness and invalidation.</li><li>Avoid duplicate HTTP hops.</li><li>Check production, not just dev behavior.</li></ul></div><div class="tile"><h3>Debugging checklist</h3><ul><li>Read server and browser console separately.</li><li>Check network status and response body.</li><li>Look for hydration mismatches.</li><li>Verify env vars, build logs and runtime logs.</li></ul></div></div>
-<p><b>Hydration mismatch examples:</b> rendering different values on server and client (current time/randomness), reading browser-only state during initial render, invalid HTML nesting, or locale-dependent output. Make initial output deterministic and defer browser-only behavior to effects when appropriate.</p></section>
+<p><b>Hydration mismatch examples:</b> rendering different values on server and client (current time/randomness), reading browser-only state during initial render, invalid HTML nesting, or locale-dependent output. Make initial output deterministic and defer browser-only behavior to effects when appropriate.</p>
+<h3>Lazy-load heavy client widgets</h3>
+<pre><code>'use client'
+import dynamic from 'next/dynamic'
 
-<section class="panel" id="structure"><h2>14 · A maintainable project structure</h2>
+const Chart = dynamic(() =&gt; import('./chart'), {
+  ssr: false,                       // browser-only lib (uses window)
+  loading: () =&gt; &lt;p&gt;Loading chart…&lt;/p&gt;,
+})</code></pre>
+<p class="muted small"><code>ssr: false</code> is only allowed inside Client Components. Server Components are already code-split automatically.</p>
+<h3>Core Web Vitals cheat sheet</h3>
+<div class="tablewrap"><table><thead><tr><th>Metric</th><th>Measures</th><th>"Good"</th><th>Next.js levers</th></tr></thead><tbody>
+<tr><td><b>LCP</b></td><td>Largest content paint</td><td>≤ 2.5 s</td><td>Prerender, <code>next/image</code> with <code>priority</code>, <code>next/font</code>, streaming</td></tr>
+<tr><td><b>INP</b></td><td>Interaction responsiveness</td><td>≤ 200 ms</td><td>Less client JS, <code>useTransition</code>, split heavy work</td></tr>
+<tr><td><b>CLS</b></td><td>Layout shift</td><td>≤ 0.1</td><td>Image dimensions, font fallback matching, sized skeletons</td></tr>
+<tr><td><b>TTFB</b></td><td>Server response start</td><td>≤ 0.8 s</td><td>Caching, parallel data, region close to DB</td></tr>
+</tbody></table></div>
+<ul><li>Report vitals with <code>useReportWebVitals</code> from <code>next/web-vitals</code>.</li><li>Inspect bundles with <code>@next/bundle-analyzer</code> or the built-in analyzer in newer versions.</li><li>Use <code>next/script</code> with <code>strategy="lazyOnload"</code> / <code>"afterInteractive"</code> for third-party scripts.</li></ul></section>
+
+<section class="panel" id="config"><h2>18 · Configuration, environment and runtimes</h2>
+<pre><code>// next.config.ts
+import type { NextConfig } from 'next'
+
+const nextConfig: NextConfig = {
+  images: {
+    remotePatterns: [{ protocol: 'https', hostname: 'cdn.example.com' }],
+  },
+  async redirects() {
+    return [{ source: '/old-blog/:slug', destination: '/blog/:slug', permanent: true }]
+  },
+  async rewrites() {
+    return [{ source: '/api/legacy/:path*', destination: 'https://legacy.example.com/:path*' }]
+  },
+  output: 'standalone',      // minimal server bundle for Docker
+}
+export default nextConfig</code></pre>
+<h3>Environment variables</h3>
+<div class="tablewrap"><table><thead><tr><th>File</th><th>Loaded in</th><th>Commit?</th></tr></thead><tbody>
+<tr><td><code>.env</code></td><td>All environments</td><td>Defaults only, no secrets</td></tr>
+<tr><td><code>.env.development</code> / <code>.env.production</code></td><td><code>next dev</code> / <code>next build</code> &amp; <code>start</code></td><td>Non-secret defaults</td></tr>
+<tr><td><code>.env.local</code></td><td>All except test; overrides the above</td><td><b>Never</b></td></tr>
+</tbody></table></div>
+<ul><li><code>NEXT_PUBLIC_*</code> values are <b>inlined at build time</b>; changing them later needs a rebuild.</li><li>Server-only variables are read at runtime on the server, so one Docker image can serve multiple environments.</li><li>Validate required env vars at startup (e.g. a Zod schema) so missing config fails fast.</li></ul>
+<h3>Node.js vs Edge runtime</h3>
+<div class="grid2"><div class="tile"><h3>Node.js (default)</h3><ul><li>Full Node APIs and npm ecosystem.</li><li>Best for DB drivers, ORMs, file system, heavy work.</li></ul></div><div class="tile"><h3>Edge</h3><ul><li>Web-standard APIs only, smaller cold starts.</li><li>Limited packages and no native Node modules; check per-version support.</li></ul></div></div>
+<h3>Route segment config</h3>
+<pre><code>export const dynamic = 'force-dynamic'   // or 'force-static'
+export const revalidate = 60             // seconds
+export const runtime = 'nodejs'          // or 'edge'
+export const maxDuration = 30            // platform-dependent</code></pre>
+<div class="warn"><b>Version note:</b> with Cache Components enabled, some segment options such as <code>dynamic</code> and <code>revalidate</code> are replaced by <code>'use cache'</code> / <code>cacheLife</code>. Check the docs for the version in <code>package.json</code>.</div>
+<p><b>Observability:</b> <code>instrumentation.ts</code> exports <code>register()</code> (runs once at server start, used for OpenTelemetry/Sentry setup) and <code>onRequestError</code> to report server errors.</p></section>
+
+<section class="panel" id="testing"><h2>19 · Testing strategy</h2>
+<div class="grid3"><div class="tile"><span class="tag">Unit</span><h3>Vitest / Jest</h3><p>Pure functions, validation schemas, DAL helpers, synchronous components with React Testing Library.</p></div><div class="tile"><span class="tag">Integration</span><h3>Actions & handlers</h3><p>Call Server Actions / Route Handlers directly with a test DB; assert auth and validation paths.</p></div><div class="tile"><span class="tag">E2E</span><h3>Playwright / Cypress</h3><p>Real browser against <code>next build &amp;&amp; next start</code>; covers async Server Components, routing and caching.</p></div></div>
+<pre><code>// __tests__/nav-link.test.tsx (Vitest + React Testing Library)
+import { render, screen } from '@testing-library/react'
+import { NavLink } from '@/components/nav-link'
+
+vi.mock('next/navigation', () =&gt; ({ usePathname: () =&gt; '/about' }))
+
+test('marks active link', () =&gt; {
+  render(&lt;NavLink href="/about"&gt;About&lt;/NavLink&gt;)
+  expect(screen.getByRole('link')).toHaveAttribute('aria-current', 'page')
+})
+
+// e2e/checkout.spec.ts (Playwright)
+test('user can add to cart', async ({ page }) =&gt; {
+  await page.goto('/products/1')
+  await page.getByRole('button', { name: 'Add to cart' }).click()
+  await expect(page.getByText('1 item')).toBeVisible()
+})</code></pre>
+<div class="warn"><b>Gotcha:</b> async Server Components are not well supported by Jest/Vitest render utilities yet—test their logic in the data layer and cover the rendered page with E2E tests.</div>
+<div class="callout"><b>What to test first:</b> authorization (user A cannot read/modify user B's data), form validation errors, 404 paths, and one happy-path E2E per critical flow (sign in, checkout).</div></section>
+
+<section class="panel" id="structure"><h2>20 · A maintainable project structure</h2>
 <pre><code>src/
   app/
     layout.tsx
@@ -313,7 +717,7 @@ next.config.ts
 <p>Use route folders for route-specific composition, shared components for reusable UI, and a server-only data/access layer for database queries and authorization. This is a starting point, not a mandatory framework structure.</p>
 <h3>Build a small production-style app to learn</h3><ol><li>Product listing with filtering/search query parameters.</li><li>Dynamic product detail route and not-found handling.</li><li>Server-side data access with intentional caching.</li><li>Client-side filter/sort controls in a small Client Component.</li><li>Form mutation using a Server Action with validation and authorization.</li><li>Route Handler for health or integration endpoint.</li><li>Loading, error, metadata, optimized images and responsive UI.</li><li>Deploy, test production build, inspect logs and document trade-offs.</li></ol></section>
 
-<section class="panel priority green" id="deploy"><div class="importance good">✓ Use before shipping</div><h2>15 · Production readiness checklist</h2><div class="checklist" id="checklist">
+<section class="panel priority green" id="deploy"><div class="importance good">✓ Use before shipping</div><h2>21 · Production readiness checklist</h2><div class="checklist" id="checklist">
 <label><input type="checkbox"><span>Routing, dynamic params and 404 behavior are tested.</span></label>
 <label><input type="checkbox"><span>Server/Client boundaries are intentional; no unnecessary client JavaScript.</span></label>
 <label><input type="checkbox"><span>All data access and mutations validate input and enforce authorization.</span></label>
@@ -324,9 +728,14 @@ next.config.ts
 <label><input type="checkbox"><span>Metadata, social previews, images, fonts and accessibility are checked.</span></label>
 <label><input type="checkbox"><span>Production build passes; environment variables are configured in deployment.</span></label>
 <label><input type="checkbox"><span>Monitoring/logging and a rollback strategy exist for important applications.</span></label>
+<label><input type="checkbox"><span>Session cookies are httpOnly, secure and sameSite; every Server Action and Route Handler re-checks auth.</span></label>
+<label><input type="checkbox"><span>Security headers (CSP, nosniff, frame options) and rate limiting on auth/expensive endpoints are configured.</span></label>
+<label><input type="checkbox"><span>Core Web Vitals (LCP, INP, CLS) measured on real devices; LCP image is prioritized.</span></label>
+<label><input type="checkbox"><span>sitemap, robots, canonical URLs and OG images are generated for public pages.</span></label>
+<label><input type="checkbox"><span>Unit tests for data/validation logic and E2E tests for critical flows pass in CI.</span></label>
 </div><p class="muted small">Checklist progress is session-only; use your browser print dialog to save this guide as a PDF.</p></section>
 
-<section class="panel" id="questions"><h2>16 · Interview questions to practise aloud</h2>
+<section class="panel" id="questions"><h2>22 · Interview questions to practise aloud</h2>
 <div class="searchbar"><input id="qsearch" type="search" placeholder="Filter questions (e.g. cache, routing, SSR)"><button class="btn" onclick="filterQuestions()">Filter</button></div>
 <ul id="questionsList">
 <li>Why use Next.js instead of React with a separate router?</li>
@@ -345,10 +754,31 @@ next.config.ts
 <li>What causes hydration mismatches and how do you debug them?</li>
 <li>How do you implement metadata for a dynamic product page?</li>
 <li>What do you check before deploying a Next.js application?</li>
+<li>What is the difference between soft and hard navigation? How does <code>Link</code> prefetching work?</li>
+<li>Why must <code>useSearchParams</code> be wrapped in Suspense on a prerendered route?</li>
+<li>How would you migrate <code>getServerSideProps</code> / <code>getStaticProps</code> to the App Router?</li>
+<li>Name the cache layers in Next.js and how each is invalidated.</li>
+<li>What does React <code>cache()</code> do and how is it different from the Data Cache?</li>
+<li>What is the RSC payload and why is it used during client navigation?</li>
+<li>Explain Partial Prerendering / Cache Components and <code>'use cache'</code>.</li>
+<li>Why can <code>error.tsx</code> not catch an error thrown in the same segment's <code>layout.tsx</code>?</li>
+<li>How do <code>useActionState</code>, <code>useFormStatus</code> and <code>useOptimistic</code> improve form UX?</li>
+<li>Where should authentication checks live: Proxy, layout, page, action or DAL? Why?</li>
+<li>JWT sessions vs database sessions: trade-offs?</li>
+<li>How do you prevent IDOR, XSS and CSRF in a Next.js app?</li>
+<li>Why does runtime CSS-in-JS conflict with Server Components?</li>
+<li>How do you pass a Server Component into a Client Component?</li>
+<li>What is <code>import 'server-only'</code> and when do you use it?</li>
+<li>Node.js vs Edge runtime: when would you choose each?</li>
+<li>Why are <code>NEXT_PUBLIC_</code> variables fixed at build time?</li>
+<li>How do you improve LCP, INP and CLS in a Next.js page?</li>
+<li>When would you use <code>next/dynamic</code> with <code>ssr: false</code>?</li>
+<li>How do you test async Server Components and Server Actions?</li>
+<li>How do you deploy Next.js with Docker? What does <code>output: 'standalone'</code> do?</li>
 </ul>
 <div class="callout"><b>Answer framework:</b> define the concept → explain when you choose it → give a concrete example → mention a trade-off or failure mode. This structure demonstrates engineering judgment, not just memorization.</div></section>
 
-<section class="panel" id="docs"><h2>17 · Official documentation reading path</h2><p class="muted">This guide is a condensed study aid based on the official documentation. The docs are the source of truth for current syntax, defaults and version-specific behavior.</p>
+<section class="panel" id="docs"><h2>23 · Official documentation reading path</h2><p class="muted">This guide is a condensed study aid based on the official documentation. The docs are the source of truth for current syntax, defaults and version-specific behavior.</p>
 <ol>
 <li><a href="https://nextjs.org/docs/app/getting-started" target="_blank" rel="noreferrer">App Router — Getting Started</a> — overall learning sequence.</li>
 <li><a href="https://nextjs.org/docs/app/getting-started/layouts-and-pages" target="_blank" rel="noreferrer">Layouts and Pages</a> — routing, layouts, dynamic segments and navigation.</li>
@@ -379,6 +809,10 @@ next.config.ts
 <li><a href="https://nextjs.org/docs/app/guides/internationalization" target="_blank" rel="noreferrer">Internationalization (i18n)</a></li>
 <li><a href="https://nextjs.org/docs/app/guides/self-hosting" target="_blank" rel="noreferrer">Self-hosting</a></li>
 <li><a href="https://nextjs.org/docs/app/getting-started/deploying" target="_blank" rel="noreferrer">Deployment options</a></li>
+<li><a href="https://nextjs.org/docs/app/guides/migrating/app-router-migration" target="_blank" rel="noreferrer">Pages → App Router migration</a></li>
+<li><a href="https://nextjs.org/docs/app/guides/data-security" target="_blank" rel="noreferrer">Data security</a></li>
+<li><a href="https://nextjs.org/docs/app/guides/content-security-policy" target="_blank" rel="noreferrer">Content Security Policy</a></li>
+<li><a href="https://nextjs.org/docs/app/guides/instrumentation" target="_blank" rel="noreferrer">Instrumentation</a></li>
 </ul></div></div>
 <div class="warn"><b>Coverage boundary:</b> This file is a high-value interview and application cheat sheet, not a replacement for every page in the docs. The official docs also contain detailed API references, migration guides, advanced routing, configuration options, platform-specific deployment notes and feature-specific guides. Use the links above when implementing those features.</div>
 <div class="callout"><b>Suggested study loop:</b> read one docs page → implement its feature in the mini-app above → explain the trade-offs aloud → answer two interview questions without looking.</div>
